@@ -29,6 +29,16 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             ?? publication.readingOrder.first.map { Locator(link: $0) }
     }
     
+    // Current playback info.
+    public var playbackInfo: MediaPlaybackInfo {
+        MediaPlaybackInfo(
+            resourceIndex: resourceIndex,
+            state: state,
+            time: currentTime,
+            duration: duration
+        )
+    }
+    
     // Index of the current resource in the reading order.
     private var resourceIndex: Int = 0
     
@@ -43,27 +53,25 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
     
     private var timeControlStatusObserver: NSKeyValueObservation?
     private var currentItemObserver: NSKeyValueObservation?
-    private var loadedTimeRangesObserver: NSKeyValueObservation?
 
     private lazy var player: AVPlayer = {
         let player = AVPlayer()
         player.allowsExternalPlayback = false
         
         player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 1000), queue: .main) { [weak self] time in
-            self?.timeDidChange(time.seconds)
+            if let self = self {
+                let time = time.seconds
+                self.delegate?.navigator(self, locationDidChange: self.makeLocator(forTime: time))
+                self.playbackDidChange(time)
+            }
         }
         
         timeControlStatusObserver = player.observe(\.timeControlStatus, options: [.new, .old]) { [weak self] player, change in
-            if let self = self {
-                self.delegate?.navigator(self, stateDidChange: MediaNavigatorState(change.newValue ?? .paused))
-            }
+            self?.playbackDidChange()
         }
         
         currentItemObserver = player.observe(\.currentItem, options: [.new, .old]) { [weak self] player, change in
-            self?.loadedTimeRangesDidChange()
-            self?.loadedTimeRangesObserver = change.newValue??.observe(\.loadedTimeRanges, options: [.new, .old]) { [weak self] item, change in
-                self?.loadedTimeRangesDidChange()
-            }
+            self?.playbackDidChange()
         }
 
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] notification in
@@ -75,21 +83,22 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         return player
     }()
     
-    private func timeDidChange(_ time: Double) {
-        delegate?.navigator(self, locationDidChange: makeLocator(forTime: time))
-        delegate?.navigator(self, timeDidChange: time, duration: duration)
-    }
-    
-    private func loadedTimeRangesDidChange() {
-        let ranges: [Range<Double>] = (player.currentItem?.loadedTimeRanges ?? [])
+    private func playbackDidChange(_ time: Double? = nil) {
+        delegate?.navigator(self, playbackDidChange: MediaPlaybackInfo(
+            resourceIndex: resourceIndex,
+            state: state,
+            time: time ?? currentTime,
+            duration: duration
+        ))
+        // FIXME: probably not working when paused
+        delegate?.navigator(self, loadedTimeRangesDidChange: (player.currentItem?.loadedTimeRanges ?? [])
             .map { value in
                 let range = value.timeRangeValue
                 let start = range.start.seconds
                 let duration = range.duration.seconds
                 return start..<(start + duration)
             }
-        
-        delegate?.navigator(self, loadedTimeRangesDidChange: ranges)
+        )
     }
 
     private func makeLocator(forTime time: Double) -> Locator {
@@ -132,8 +141,8 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             player.seek(to: CMTime(seconds: time, preferredTimescale: 1000))
         }
         
-        delegate?.navigator(self, timeDidChange: time, duration: duration)
-        
+        playbackDidChange(time)
+
         return true
     }
 
@@ -193,8 +202,8 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         }
     }
     
-    public var state: MediaNavigatorState {
-        MediaNavigatorState(player.timeControlStatus)
+    public var state: MediaPlaybackState {
+        MediaPlaybackState(player.timeControlStatus)
     }
 
     public func play() {
@@ -209,12 +218,21 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         player.pause()
     }
     
+    public func seek(to time: Double) {
+        player.seek(to: CMTime(seconds: time, preferredTimescale: 1000))
+    }
+    
+    public func seek(relatively delta: Double) {
+        seek(to: currentTime + delta)
+    }
+    
 }
 
 private extension Locator {
     
     private static let timeFragmentRegex = try! NSRegularExpression(pattern: #"t=(\d+(?:\.\d+)?)"#)
     
+    // FIXME: Should probably be in `Locator` itself.
     func time(forDuration duration: Double? = nil) -> Double? {
         if let progression = locations.progression, let duration = duration {
             return progression * duration
@@ -235,7 +253,7 @@ private extension Locator {
 }
 
 @available(iOS 10.0, *)
-private extension MediaNavigatorState {
+private extension MediaPlaybackState {
     
     init(_ timeControlStatus: AVPlayer.TimeControlStatus) {
         switch timeControlStatus {

@@ -11,10 +11,35 @@
 
 import Foundation
 
-public enum MediaNavigatorState {
+public enum MediaPlaybackState {
     case paused
     case loading
     case playing
+}
+
+public struct MediaPlaybackInfo {
+    
+    /// Index of the current resource in the `readingOrder`.
+    public let resourceIndex: Int
+    
+    /// Index in the reading order of the current resource being played.
+    /// Link of the current resource being played.
+    /// Returns whether the resource is currently playing or not.
+    public let state: MediaPlaybackState
+    
+    /// Current playback position in seconds.
+    public let time: Double
+    
+    /// Duration in seconds of the resource currently being played, if known.
+    public let duration: Double?
+
+    public var progress: Double {
+        guard let duration = duration else {
+            return 0
+        }
+        return time / duration
+    }
+
 }
 
 public protocol MediaNavigator: Navigator {
@@ -29,8 +54,8 @@ public protocol MediaNavigator: Navigator {
     /// Default is 1.0
     var rate: Double { get set }
 
-    /// Returns whether the media is currently playing or not.
-    var state: MediaNavigatorState { get }
+    /// Returns whether the resource is currently playing or not.
+    var state: MediaPlaybackState { get }
 
     /// Resumes or start the playback.
     func play()
@@ -38,9 +63,15 @@ public protocol MediaNavigator: Navigator {
     /// Pauses the playback.
     func pause()
     
+    /// Seeks to the given time in the current resource.
+    func seek(to time: Double)
+    
+    /// Seeks relatively from the current time in the current resource.
+    func seek(relatively delta: Double)
+    
 }
 
-extension MediaNavigator {
+public extension MediaNavigator {
     
     /// Toggles the playback.
     func togglePlayback() {
@@ -56,29 +87,22 @@ extension MediaNavigator {
 
 public protocol MediaNavigatorDelegate: NavigatorDelegate {
     
-    /// Called when the playback status changes.
-    func navigator(_ navigator: MediaNavigator, stateDidChange state: MediaNavigatorState)
+    /// Called when the playback changes.
+    func navigator(_ navigator: MediaNavigator, playbackDidChange info: MediaPlaybackInfo)
     
-    /// Called when the duration or current time changes.
-    func navigator(_ navigator: MediaNavigator, timeDidChange time: Double, duration: Double?)
-    
-    /// Called when the loaded audio data ranges change.
+    /// Called when the ranges of buffered media data change. They may be discontinuous.
     func navigator(_ navigator: MediaNavigator, loadedTimeRangesDidChange ranges: [Range<Double>])
-    
+
 }
 
 public extension MediaNavigatorDelegate {
     
-    func navigator(_ navigator: MediaNavigator, stateDidChange state: MediaNavigatorState) {
-        // Optional
-    }
-    
-    func navigator(_ navigator: MediaNavigator, timeDidChange time: Double, duration: Double?) {
+    func navigator(_ navigator: MediaNavigator, playbackDidChange info: MediaPlaybackInfo) {
         // Optional
     }
     
     func navigator(_ navigator: MediaNavigator, loadedTimeRangesDidChange ranges: [Range<Double>]) {
         // Optional
     }
-    
+
 }
