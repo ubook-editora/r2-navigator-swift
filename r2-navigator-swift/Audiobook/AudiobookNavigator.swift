@@ -45,7 +45,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
     /// Duration in seconds in the current resource.
     private var duration: Double? {
         if let duration = player.currentItem?.duration, duration.isNumeric {
-            return duration.seconds
+            return duration.secondsOrZero
         } else {
             return publication.readingOrder[resourceIndex].duration
         }
@@ -60,7 +60,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         
         player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 1000), queue: .main) { [weak self] time in
             if let self = self {
-                let time = time.seconds
+                let time = time.secondsOrZero
                 self.delegate?.navigator(self, locationDidChange: self.makeLocator(forTime: time))
                 self.playbackDidChange(time)
             }
@@ -75,8 +75,10 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         }
 
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] notification in
-            if let currentItem = player.currentItem, currentItem == (notification.object as? AVPlayerItem) {
-                self?.goToNextResource()
+            if let self = self, let currentItem = player.currentItem, currentItem == (notification.object as? AVPlayerItem) {
+                if self.goToNextResource() {
+                    self.play()
+                }
             }
         }
         
@@ -94,8 +96,8 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         delegate?.navigator(self, loadedTimeRangesDidChange: (player.currentItem?.loadedTimeRanges ?? [])
             .map { value in
                 let range = value.timeRangeValue
-                let start = range.start.seconds
-                let duration = range.duration.seconds
+                let start = range.start.secondsOrZero
+                let duration = range.duration.secondsOrZero
                 return start..<(start + duration)
             }
         )
@@ -129,10 +131,13 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             return false
         }
         
+        player.pause()
+        
         // Loads resource
-        if resourceIndex != newResourceIndex {
+        if player.currentItem == nil || resourceIndex != newResourceIndex {
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
             resourceIndex = newResourceIndex
+            delegate?.navigator(self, loadedTimeRangesDidChange: [])
         }
 
         // Seeks to time
@@ -141,7 +146,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             player.seek(to: CMTime(seconds: time, preferredTimescale: 1000))
         }
         
-        playbackDidChange(time)
+        player.play()
 
         return true
     }
@@ -183,7 +188,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
     // MARK: – MediaNavigator
     
     public var currentTime: Double {
-        player.currentTime().seconds
+        return player.currentTime().secondsOrZero
     }
 
     public var volume: Double {
@@ -266,6 +271,14 @@ private extension MediaPlaybackState {
         @unknown default:
             self = .loading
         }
+    }
+    
+}
+
+private extension CMTime {
+    
+    var secondsOrZero: Double {
+        return isNumeric ? seconds : 0
     }
     
 }
