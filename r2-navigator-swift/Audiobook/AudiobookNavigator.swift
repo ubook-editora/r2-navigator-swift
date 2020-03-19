@@ -57,7 +57,8 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
     private lazy var player: AVPlayer = {
         let player = AVPlayer()
         player.allowsExternalPlayback = false
-        
+        player.automaticallyWaitsToMinimizeStalling = false
+
         player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 1000), queue: .main) { [weak self] time in
             if let self = self {
                 let time = time.secondsOrZero
@@ -138,8 +139,8 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             return false
         }
         
-        player.pause()
-        
+        pause()
+
         // Loads resource
         if player.currentItem == nil || resourceIndex != newResourceIndex {
             player.replaceCurrentItem(with: AVPlayerItem(url: url))
@@ -153,7 +154,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
             player.seek(to: CMTime(seconds: time, preferredTimescale: 1000))
         }
         
-        player.play()
+        play()
 
         return true
     }
@@ -206,11 +207,14 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         }
     }
 
-    public var rate: Double {
-        get { Double(player.rate) }
-        set {
-            assert(newValue >= 0)
-            player.rate = Float(newValue)
+    public var rate: Double = 1 {
+        // We don't alias to `player.rate`, because it might be 0 when the player is paused. `rate`
+        // is actually the default rate while playing.
+        didSet {
+            assert(rate >= 0)
+            if state != .paused {
+                player.rate = Float(rate)
+            }
         }
     }
     
@@ -222,8 +226,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         if player.currentItem == nil, let location = initialLocation {
             go(to: location)
         }
-        
-        player.play()
+        player.playImmediately(atRate: Float(rate))
     }
 
     public func pause() {
