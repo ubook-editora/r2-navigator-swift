@@ -90,6 +90,10 @@ public protocol MediaNavigatorDelegate: NavigatorDelegate {
     /// Called when the playback changes.
     func navigator(_ navigator: MediaNavigator, playbackDidChange info: MediaPlaybackInfo)
     
+    /// Called when the navigator finished playing the current resource.
+    /// Returns whether the next resource should played, default is true.
+    func navigator(_ navigator: MediaNavigator, shouldPlayNextResource info: MediaPlaybackInfo) -> Bool
+    
     /// Called when the ranges of buffered media data change. They may be discontinuous.
     func navigator(_ navigator: MediaNavigator, loadedTimeRangesDidChange ranges: [Range<Double>])
 
@@ -98,11 +102,13 @@ public protocol MediaNavigatorDelegate: NavigatorDelegate {
 public extension MediaNavigatorDelegate {
     
     func navigator(_ navigator: MediaNavigator, playbackDidChange info: MediaPlaybackInfo) {
-        // Optional
+    }
+    
+    func navigator(_ navigator: MediaNavigator, shouldPlayNextResource info: MediaPlaybackInfo) -> Bool {
+        return true
     }
     
     func navigator(_ navigator: MediaNavigator, loadedTimeRangesDidChange ranges: [Range<Double>]) {
-        // Optional
     }
 
 }

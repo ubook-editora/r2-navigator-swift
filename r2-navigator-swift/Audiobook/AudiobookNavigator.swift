@@ -75,7 +75,10 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
         }
 
         NotificationCenter.default.addObserver(forName: .AVPlayerItemDidPlayToEndTime, object: nil, queue: .main) { [weak self] notification in
-            if let self = self, let currentItem = player.currentItem, currentItem == (notification.object as? AVPlayerItem) {
+            if let self = self,
+                (self.delegate?.navigator(self, shouldPlayNextResource: self.makePlaybackInfo()) ?? true),
+                let currentItem = player.currentItem,
+                currentItem == (notification.object as? AVPlayerItem) {
                 if self.goToNextResource() {
                     self.play()
                 }
@@ -86,12 +89,7 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
     }()
     
     private func playbackDidChange(_ time: Double? = nil) {
-        delegate?.navigator(self, playbackDidChange: MediaPlaybackInfo(
-            resourceIndex: resourceIndex,
-            state: state,
-            time: time ?? currentTime,
-            duration: duration
-        ))
+        delegate?.navigator(self, playbackDidChange: makePlaybackInfo(forTime: time))
         // FIXME: probably not working when paused
         delegate?.navigator(self, loadedTimeRangesDidChange: (player.currentItem?.loadedTimeRanges ?? [])
             .map { value in
@@ -100,6 +98,15 @@ open class AudiobookNavigator: MediaNavigator, Loggable {
                 let duration = range.duration.secondsOrZero
                 return start..<(start + duration)
             }
+        )
+    }
+    
+    private func makePlaybackInfo(forTime time: Double? = nil) -> MediaPlaybackInfo {
+        return MediaPlaybackInfo(
+            resourceIndex: resourceIndex,
+            state: state,
+            time: time ?? currentTime,
+            duration: duration
         )
     }
 
