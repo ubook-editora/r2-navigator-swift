@@ -46,7 +46,7 @@ class EPUBSpreadView: UIView, Loggable {
     let resourcesURL: URL?
     let webView: WebView
 
-    let contentLayout: ContentLayoutStyle
+    let contentLayout: ContentLayout
     let readingProgression: ReadingProgression
     let userSettings: UserSettings
     let editingActions: EditingActionsController
@@ -67,7 +67,7 @@ class EPUBSpreadView: UIView, Loggable {
 
     private(set) var spreadLoaded = false
 
-    required init(publication: Publication, spread: EPUBSpread, resourcesURL: URL?, contentLayout: ContentLayoutStyle, readingProgression: ReadingProgression, userSettings: UserSettings, animatedLoad: Bool = false, editingActions: EditingActionsController, contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]) {
+    required init(publication: Publication, spread: EPUBSpread, resourcesURL: URL?, contentLayout: ContentLayout, readingProgression: ReadingProgression, userSettings: UserSettings, animatedLoad: Bool = false, editingActions: EditingActionsController, contentInset: [UIUserInterfaceSizeClass: EPUBContentInsets]) {
         self.publication = publication
         self.spread = spread
         self.resourcesURL = resourcesURL
@@ -164,6 +164,32 @@ class EPUBSpreadView: UIView, Loggable {
     /// Evaluates the given JavaScript into the resource's HTML page.
     func evaluateScript(_ script: String, completion: ((Any?, Error?) -> Void)? = nil) {
         webView.evaluateJavaScript(script, completionHandler: completion)
+    }
+    
+    /// Called from the JS code when logging a message.
+    private func didLog(_ body: Any) {
+        guard let body = body as? String else {
+            return
+        }
+        log(.debug, "JavaScript: \(body)")
+    }
+    
+    /// Called from the JS code when logging an error.
+    private func didLogError(_ body: Any) {
+        guard let error = body as? [String: Any],
+            var message = error["message"] as? String else
+        {
+            return
+        }
+        message = "JavaScript: \(message)"
+        
+        if let file = error["filename"] as? String, file != "/",
+            let line = error["line"] as? Int, line != 0
+        {
+            self.log(.error, message, file: file, line: line)
+        } else {
+            self.log(.error, message)
+        }
     }
   
     /// Called from the JS code when a tap is detected.
@@ -313,6 +339,8 @@ class EPUBSpreadView: UIView, Loggable {
     
     /// To override in subclasses if needed.
     func registerJSMessages() {
+        registerJSMessage(named: "log") { [weak self] in self?.didLog($0) }
+        registerJSMessage(named: "logError") { [weak self] in self?.didLogError($0) }
         registerJSMessage(named: "tap") { [weak self] in self?.didTap($0) }
         registerJSMessage(named: "spreadLoaded") { [weak self] in self?.spreadDidLoad($0) }
         registerJSMessage(named: "selectionChanged") { [weak self] in self?.selectionDidChange($0) }
@@ -362,7 +390,7 @@ extension EPUBSpreadView: PageView {
     var positionCount: Int {
         // Sum of the number of positions in all the resources of the spread.
         return spread.links
-            .map { publication.positionListByResource[$0.href]?.count ?? 0 }
+            .map { publication.positionsByResource[$0.href]?.count ?? 0 }
             .reduce(0, +)
     }
 
