@@ -68,7 +68,7 @@ open class CBZNavigatorViewController: UIViewController, VisualNavigator, Loggab
     
     private var currentResourceIndex: Int {
         guard let imageViewController = pageViewController.viewControllers?.first as? ImageViewController,
-            publication.positionList.indices.contains(imageViewController.index) else
+            publication.positions.indices.contains(imageViewController.index) else
         {
             return initialIndex
         }
@@ -76,10 +76,10 @@ open class CBZNavigatorViewController: UIViewController, VisualNavigator, Loggab
     }
     
     public var currentPosition: Locator? {
-        guard publication.positionList.indices.contains(currentResourceIndex) else {
+        guard publication.positions.indices.contains(currentResourceIndex) else {
             return nil
         }
-        return publication.positionList[currentResourceIndex]
+        return publication.positions[currentResourceIndex]
     }
     
     @discardableResult
@@ -90,9 +90,9 @@ open class CBZNavigatorViewController: UIViewController, VisualNavigator, Loggab
         let direction: UIPageViewController.NavigationDirection = {
             let forward: Bool = {
                 switch readingProgression {
-                case .ltr, .auto:
+                case .ltr, .ttb, .auto:
                     return (currentResourceIndex < index)
-                case .rtl:
+                case .rtl, .btt:
                     return (currentResourceIndex >= index)
                 }
             }()
@@ -166,9 +166,9 @@ extension CBZNavigatorViewController: UIPageViewControllerDataSource {
         }
         var index = imageVC.index
         switch readingProgression {
-        case .ltr, .auto:
+        case .ltr, .ttb, .auto:
             index -= 1
-        case .rtl:
+        case .rtl, .btt:
             index += 1
         }
         return imageViewController(at: index)
@@ -180,9 +180,9 @@ extension CBZNavigatorViewController: UIPageViewControllerDataSource {
         }
         var index = imageVC.index
         switch readingProgression {
-        case .ltr, .auto:
+        case .ltr, .ttb, .auto:
             index += 1
-        case .rtl:
+        case .rtl, .btt:
             index -= 1
         }
         return imageViewController(at: index)
