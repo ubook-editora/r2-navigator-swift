@@ -9,7 +9,7 @@ target 'r2-navigator-swift' do
   use_frameworks!
   
   pod 'SwiftSoup', '2.3.2'
-  pod 'R2Shared', '2.0.0-alpha.1-fix.3'
+  pod 'R2Shared', '2.0.0-alpha.2-fix.1'
 
   # Pods for r2-navigator-swift
 
